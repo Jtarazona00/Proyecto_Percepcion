@@ -2,9 +2,6 @@
 
 Sistema de reconocimiento de Lengua de Señas Peruana en tiempo real con síntesis de voz, orientado al **Hospital Regional Docente de Trujillo**. Proyecto del curso **Percepción Computacional** (UPAO, 2026-1).
 
-## Objetivo
-
-Permitir que personas sordas o con discapacidad auditiva se comuniquen con personal médico mediante una cámara web: el sistema reconoce señas en video, las clasifica y las pronuncia en voz alta.
 
 ## Estado actual
 
@@ -70,7 +67,7 @@ pip install -r requirements.txt
 | `opencv-python` | Captura de video desde la webcam y manipulación de frames. |
 | `mediapipe` | Extracción de landmarks (pose + manos) — la base del feature vector. |
 | `tensorflow` | Construir, entrenar y cargar el modelo LSTM. |
-| `scikit-learn` | Baseline SVM, StandardScaler, métricas (accuracy, classification report, confusion matrix) y split estratificado. |
+| `scikit-learn` | Baseline SVM, StandardScaler, métricas (accuracy, classification report, confusion matrix) y split estrategico. |
 | `matplotlib` | Graficar curvas de loss/accuracy y matriz de confusión. |
 | `seaborn` | Mejora visual de las gráficas de evaluación. |
 | `joblib` | Persistir el SVM y el scaler entrenados (`.joblib`). |
@@ -96,4 +93,4 @@ El dataset debe estar en `data/processed/<clase>/<secuencia>.npy`, donde cada ar
 | Modelo | TensorFlow/Keras, scikit-learn, Google Colab |
 | Evaluación | matplotlib, scikit-learn, TensorBoard |
 | TTS | pyttsx3 / gTTS |
-| MLOps (futuro) | Docker, Flask/FastAPI, MLflow |
+| MLOps | Docker, Flask/FastAPI, MLflow |
