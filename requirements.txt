@@ -1,0 +1,10 @@
+numpy
+opencv-python
+mediapipe
+tensorflow
+scikit-learn
+matplotlib
+seaborn
+joblib
+pyttsx3
+gTTS

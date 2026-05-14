@@ -1,0 +1,40 @@
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Datos y modelos pesados
+data/raw/
+data/processed/
+models/*.keras
+models/*.h5
+models/*.joblib
+*.npy
+*.npz
+
+# VS Code / IDEs
+.vscode/
+.idea/
+.claude/
+
+# SO
+.DS_Store
+Thumbs.db
+
+# Logs y outputs
+*.log
+logs/
+runs/
+mlruns/
+
+# Jupyter
+*.ipynb_checkpoints
