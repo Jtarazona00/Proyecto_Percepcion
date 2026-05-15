@@ -50,6 +50,8 @@ percepcion/
 ├── config.py                       # rutas, clases, hiperparámetros
 ├── main.py                         # entrypoint
 ├── requirements.txt
+├── notebooks/
+│   └── 01_pipeline_completo_colab.ipynb   # pipeline end-to-end en Colab
 └── src/
     ├── preprocesamiento/
     │   ├── extraccion_keypoints.py # MediaPipe → vector de 258
