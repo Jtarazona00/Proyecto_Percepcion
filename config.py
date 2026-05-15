@@ -10,13 +10,18 @@ MODELS_DIR = ROOT / "models"
 for d in (DATA_DIR, RAW_DIR, PROCESSED_DIR, MODELS_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
-# Dataset VideoLSP10
+# Dataset VideoLSP10 — 10 clases reales segun label.txt
 CLASSES = [
-    "hola", "gracias", "porfavor", "si", "no",
-    "bueno", "malo", "ayuda", "dolor", "agua",
-    "comida", "bano", "doctor", "enfermera", "hospital",
-    "familia", "casa", "frio", "calor", "perdon",
-    "buenos_dias",
+    "ayudame",
+    "por_favor",
+    "disculpame",
+    "cual_es_tu_nombre",
+    "donde_vives_tu",
+    "no_entiendo",
+    "que_haces_tu",
+    "hola_como_estas_tu",
+    "gracias",
+    "hasta_manana",
 ]
 NUM_CLASSES = len(CLASSES)
 
