@@ -20,6 +20,9 @@ models/*.h5
 models/*.joblib
 *.npy
 *.npz
+*.rar
+entreno dataset/
+_rgb_completo/
 
 # VS Code / IDEs
 .vscode/
