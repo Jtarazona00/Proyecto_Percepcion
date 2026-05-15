@@ -28,8 +28,10 @@ def procesar_carpeta_jpg(carpeta: Path, holistic) -> Optional[np.ndarray]:
     """Lee imagenes .jpg de la carpeta, muestrea uniformemente a FRAMES,
     pasa cada frame por MediaPipe y devuelve array (FRAMES, FEATURES_PER_FRAME).
     """
+    # Case-insensitive: el dataset VideoLSP10 usa .Jpg con J mayuscula
     archivos = sorted(
-        carpeta.glob("*.jpg"),
+        [p for p in carpeta.iterdir()
+         if p.is_file() and p.suffix.lower() in (".jpg", ".jpeg", ".png")],
         key=lambda p: int(p.stem) if p.stem.isdigit() else 0,
     )
     n = len(archivos)
