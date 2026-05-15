@@ -1,7 +1,7 @@
 numpy
 opencv-python
 mediapipe==0.10.14
-tensorflow
+tensorflow==2.18.0
 scikit-learn
 matplotlib
 seaborn
