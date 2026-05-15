@@ -5,10 +5,25 @@ Sistema de reconocimiento de Lengua de Señas Peruana en tiempo real con síntes
 
 ## Estado actual
 
-- **Sección 3** — Adquisición y preprocesamiento: completa.
-- **Sección 4.1** — Baseline SVM con features estadísticas: **67.3 %** de precisión.
-- **Sección 4.2** — Arquitectura del modelo LSTM: definida.
-- **Sección 4.3** — Entrenamiento: convergencia en época 73, **val_accuracy 93.5 %**.
+- **Sección 3** — Adquisición y preprocesamiento: completa (600 secuencias × 30 frames extraídas con MediaPipe).
+- **Sección 4.1** — Baseline SVM con features estadísticas: **85.00 %** de precisión en test.
+- **Sección 4.2** — Arquitectura LSTM definida (capa final `Dense 10`).
+- **Sección 4.3** — Entrenamiento completado: **val_accuracy mejor 98.36 %**, train_accuracy 99.16 %.
+- **Sección 5** — Evaluación completada: **test_accuracy 83.33 %**, macro F1 = 0.83.
+- **Sección 6** — Despliegue / producción: pendiente.
+
+## Resultados finales
+
+| Modelo | Test Accuracy | Notas |
+|---|---|---|
+| Baseline SVM (RBF) | **85.00 %** | Features estadísticas: media + std + rango → 774 features |
+| LSTM (30, 258) | **83.33 %** | val_accuracy mejor: 98.36 %, F1 macro = 0.83 |
+
+- **Clases con F1 = 1.00**: `no_entiendo`, `que_haces_tu`.
+- **Confusiones recurrentes**: `ayudame` ↔ `disculpame`, `donde_vives_tu` ↔ `hasta_manana` (movimientos visualmente similares).
+- **Gap train-test** (~16 %) indica overfitting moderado, esperable con 60 muestras por clase; mitigado con Dropout 0.3, EarlyStopping y ReduceLROnPlateau.
+
+> El modelo entrenado (`modelo_lsp_final.keras`), las curvas de aprendizaje y la matriz de confusión se guardan en Google Drive (`/MyDrive/VideoLSP10_models/`) tras ejecutar el notebook.
 
 ## Arquitectura
 
