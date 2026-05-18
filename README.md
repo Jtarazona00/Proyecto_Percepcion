@@ -7,10 +7,11 @@ Sistema de reconocimiento de Lengua de Señas Peruana en tiempo real con síntes
 
 - **Sección 3** — Adquisición y preprocesamiento: completa (600 secuencias × 30 frames extraídas con MediaPipe).
 - **Sección 4.1** — Baseline SVM con features estadísticas: **85.00 %** de precisión en test.
-- **Sección 4.2** — Arquitectura LSTM definida (capa final `Dense 10`).
+- **Sección 4.2** — Arquitectura BiLSTM definida (capa final `Dense N` ajustable).
 - **Sección 4.3** — Entrenamiento completado: **val_accuracy mejor 98.36 %**, train_accuracy 99.16 %.
 - **Sección 5** — Evaluación completada: **test_accuracy 83.33 %**, macro F1 = 0.83.
 - **Sección 6** — Despliegue / producción: pendiente.
+- **Ampliación de vocabulario**: pipeline para PUCP-305 (~305 glosas LSP) listo en `notebooks/02_pucp305_pipeline_colab.ipynb`. Soporte multi-dataset vía `DATASET` env var (`videolsp10` | `pucp305`).
 
 ## Resultados finales
 
@@ -35,7 +36,8 @@ Webcam → MediaPipe Holistic → tensor (30, 258)
        → Dense 10 (Softmax) → palabra reconocida → TTS
 ```
 
-- **Dataset**: [VideoLSP10](https://github.com/videoLSP/VideoLSP10) — 10 clases (ayudame, por_favor, disculpame, cual_es_tu_nombre, donde_vives_tu, no_entiendo, que_haces_tu, hola_como_estas_tu, gracias, hasta_manana), capturadas con Kinect (RGB + depth + skeleton).
+- **Dataset principal**: [VideoLSP10](https://github.com/videoLSP/VideoLSP10) — 10 clases (ayudame, por_favor, disculpame, cual_es_tu_nombre, donde_vives_tu, no_entiendo, que_haces_tu, hola_como_estas_tu, gracias, hasta_manana), capturadas con Kinect (RGB + depth + skeleton).
+- **Dataset ampliado (opcional)**: [PUCP-305 glosas](https://datos.pucp.edu.pe/dataset.xhtml?persistentId=hdl%3A20.500.12534%2FJU4OLG) — ~305 glosas de LSP en videos continuos con anotaciones ELAN (Pontificia Universidad Católica del Perú). Pipeline en `notebooks/02_pucp305_pipeline_colab.ipynb`.
 - **Features por frame (258)**: pose (33 × 4) + mano izquierda (21 × 3) + mano derecha (21 × 3).
 - **Entrenamiento**: Adam lr=0.0005, sparse_categorical_crossentropy, batch=32, 100 épocas, split 80/10/10, callbacks (EarlyStopping, ModelCheckpoint, ReduceLROnPlateau).
 
@@ -66,18 +68,22 @@ percepcion/
 ├── main.py                         # entrypoint
 ├── requirements.txt
 ├── notebooks/
-│   └── 01_pipeline_completo_colab.ipynb   # pipeline end-to-end en Colab
+│   ├── 01_pipeline_completo_colab.ipynb    # pipeline VideoLSP10 (10 clases)
+│   └── 02_pucp305_pipeline_colab.ipynb     # pipeline PUCP-305 (~305 glosas LSP)
 └── src/
     ├── preprocesamiento/
-    │   ├── extraccion_keypoints.py # MediaPipe → vector de 258
-    │   └── captura.py              # webcam/video → (30, 258)
+    │   ├── extraccion_keypoints.py        # MediaPipe → vector de 258
+    │   ├── captura.py                      # webcam/video → (30, 258)
+    │   ├── extraer_dataset.py              # VideoLSP10: JPGs → .npy
+    │   ├── parse_elan.py                   # parser de .eaf (PUCP-305)
+    │   └── extraer_dataset_pucp305.py      # PUCP-305: video+ELAN → .npy
     ├── modelos/
-    │   ├── baseline_svm.py         # SVM con features estadísticas (774)
-    │   └── lstm_modelo.py          # arquitectura LSTM
+    │   ├── baseline_svm.py                 # SVM con features estadísticas (774)
+    │   └── lstm_modelo.py                  # arquitectura BiLSTM
     ├── entrenamiento/
-    │   └── entrenar.py             # compile + callbacks + fit
+    │   └── entrenar.py                     # compile + callbacks + fit + class weights
     ├── evaluacion/
-    │   └── evaluar.py              # métricas + matriz de confusión
+    │   └── evaluar.py                      # métricas + matriz de confusión
     ├── inferencia/
     │   ├── tiempo_real.py          # webcam + predicción + TTS
     │   └── tts.py                  # síntesis de voz
