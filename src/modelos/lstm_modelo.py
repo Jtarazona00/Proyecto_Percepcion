@@ -8,17 +8,29 @@ import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Bidirectional, Dense, Dropout, Input
 
-from config import FRAMES, FEATURES_PER_FRAME, NUM_CLASSES
+import config
 
 
-def construir_modelo(dropout: float = 0.4):
+def construir_modelo(dropout: float = 0.4, num_classes: int | None = None,
+                     frames: int | None = None, features: int | None = None):
+    """BiLSTM. Lee config en tiempo de llamada (no en import) para soportar el
+    dataset PUCP-305, cuyas clases se setean dinamicamente con config.set_classes.
+    """
+    nc = num_classes if num_classes is not None else config.NUM_CLASSES
+    fr = frames if frames is not None else config.FRAMES
+    ft = features if features is not None else config.FEATURES_PER_FRAME
+    if nc < 2:
+        raise ValueError(
+            f"NUM_CLASSES={nc}. Para PUCP-305 llama config.set_classes(...) antes "
+            "de construir el modelo, o pasa num_classes explicito."
+        )
     model = Sequential([
-        Input(shape=(FRAMES, FEATURES_PER_FRAME)),
+        Input(shape=(fr, ft)),
         Bidirectional(LSTM(128, return_sequences=True)),
         Dropout(dropout),
         Bidirectional(LSTM(64)),
         Dropout(dropout),
         Dense(64, activation='relu'),
-        Dense(NUM_CLASSES, activation='softmax'),
+        Dense(nc, activation='softmax'),
     ])
     return model
