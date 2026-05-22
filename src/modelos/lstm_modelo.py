@@ -12,9 +12,14 @@ import config
 
 
 def construir_modelo(dropout: float = 0.4, num_classes: int | None = None,
-                     frames: int | None = None, features: int | None = None):
+                     frames: int | None = None, features: int | None = None,
+                     unidades: tuple[int, int] = (128, 64), densa: int = 64):
     """BiLSTM. Lee config en tiempo de llamada (no en import) para soportar el
     dataset PUCP-305, cuyas clases se setean dinamicamente con config.set_classes.
+
+    `unidades` = (LSTM1, LSTM2) y `dropout` permiten reducir capacidad para
+    combatir overfitting (ej. unidades=(64,32), dropout=0.5) sin tocar el default
+    que usa VideoLSP10.
     """
     nc = num_classes if num_classes is not None else config.NUM_CLASSES
     fr = frames if frames is not None else config.FRAMES
@@ -26,11 +31,11 @@ def construir_modelo(dropout: float = 0.4, num_classes: int | None = None,
         )
     model = Sequential([
         Input(shape=(fr, ft)),
-        Bidirectional(LSTM(128, return_sequences=True)),
+        Bidirectional(LSTM(unidades[0], return_sequences=True)),
         Dropout(dropout),
-        Bidirectional(LSTM(64)),
+        Bidirectional(LSTM(unidades[1])),
         Dropout(dropout),
-        Dense(64, activation='relu'),
+        Dense(densa, activation='relu'),
         Dense(nc, activation='softmax'),
     ])
     return model
