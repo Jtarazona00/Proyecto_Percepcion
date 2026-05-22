@@ -26,7 +26,9 @@ DATASET = os.environ.get("DATASET", "videolsp10").lower()
 
 # Tensor de entrada: (FRAMES, FEATURES_PER_FRAME)
 # 33*4 (pose) + 21*3 (mano izq) + 21*3 (mano der) = 258
-FRAMES = 30
+# PUCP-305: la mediana real es ~45 frames/video (max 112), por eso 48 en vez de
+# 30 para no descartar la mitad de la informacion temporal. VideoLSP10 sigue en 30.
+FRAMES = 48 if DATASET == "pucp305" else 30
 FEATURES_PER_FRAME = 258
 
 
