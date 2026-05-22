@@ -8,3 +8,4 @@ seaborn
 joblib
 pyttsx3
 gTTS
+google-generativeai
