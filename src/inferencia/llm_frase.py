@@ -15,7 +15,10 @@ from __future__ import annotations
 
 import os
 
-MODELO_DEFECTO = "gemini-1.5-flash"  # gratis y rapido; si tu key no lo tiene, usa listar_modelos()
+# None = autoseleccionar un modelo valido de la cuenta (recomendado: los nombres
+# concretos como 'gemini-1.5-flash' los va deprecando Google). Puedes forzar uno
+# pasando modelo='...' a armar_frase.
+MODELO_DEFECTO = None
 
 _PROMPT_SISTEMA = (
     "Eres un interprete de Lengua de Senas Peruana (LSP) en un contexto hospitalario. "
@@ -49,9 +52,45 @@ def construir_prompt(secuencia, contexto: str = "hospitalario") -> str:
     )
 
 
+def _ordenar_por_preferencia(nombres):
+    """Ordena modelos por preferencia: 'flash' (rapido/gratis) antes que 'pro';
+    version mas alta antes (orden alfab. descendente aproxima 2.5 > 2.0 > 1.5);
+    se evitan variantes 'vision'/'embedding'/'aqa' que no sirven para chat."""
+    def puntaje(n):
+        bajo = n.lower()
+        s = 0
+        if "flash" in bajo:
+            s += 100
+        elif "pro" in bajo:
+            s += 50
+        if any(x in bajo for x in ("vision", "embedding", "aqa")):
+            s -= 1000
+        return (s, bajo)  # a igual puntaje, alfabetico
+    return sorted(nombres, key=puntaje, reverse=True)
+
+
+def _resolver_modelo(genai, preferido: str | None):
+    """Devuelve un nombre de modelo valido. Si `preferido` esta disponible lo usa;
+    si no, autoselecciona el mejor de los que soportan generateContent."""
+    disponibles = [m.name for m in genai.list_models()
+                   if "generateContent" in m.supported_generation_methods]
+    if not disponibles:
+        raise RuntimeError("Tu key de Gemini no tiene modelos con generateContent.")
+    if preferido:
+        # acepta 'gemini-x' o 'models/gemini-x'
+        for n in disponibles:
+            if n == preferido or n == f"models/{preferido}" or n.endswith("/" + preferido):
+                return n
+    return _ordenar_por_preferencia(disponibles)[0]
+
+
 def armar_frase(secuencia, api_key: str | None = None,
-                modelo: str = MODELO_DEFECTO, contexto: str = "hospitalario") -> str:
-    """Secuencia de glosas (o de candidatos top-k) -> frase en espanol via Gemini."""
+                modelo: str | None = MODELO_DEFECTO, contexto: str = "hospitalario") -> str:
+    """Secuencia de glosas (o de candidatos top-k) -> frase en espanol via Gemini.
+
+    `modelo=None` autoselecciona uno valido de tu cuenta. Si pasas uno y no existe,
+    cae automaticamente al autoseleccionado (los nombres de Gemini cambian con el
+    tiempo)."""
     import google.generativeai as genai
 
     api_key = api_key or os.environ.get("GEMINI_API_KEY")
@@ -61,14 +100,22 @@ def armar_frase(secuencia, api_key: str | None = None,
             "entorno GEMINI_API_KEY (gratis en https://aistudio.google.com/apikey)."
         )
     genai.configure(api_key=api_key)
-    respuesta = genai.GenerativeModel(modelo).generate_content(construir_prompt(secuencia, contexto))
+    nombre = _resolver_modelo(genai, modelo)
+    prompt = construir_prompt(secuencia, contexto)
+    try:
+        respuesta = genai.GenerativeModel(nombre).generate_content(prompt)
+    except Exception:
+        # fallback final: reintenta con el mejor autoseleccionado
+        alt = _resolver_modelo(genai, None)
+        respuesta = genai.GenerativeModel(alt).generate_content(prompt)
     return respuesta.text.strip()
 
 
 def listar_modelos(api_key: str | None = None):
-    """Lista los modelos Gemini disponibles para tu key (utiles para generar texto).
-    Util si `MODELO_DEFECTO` da error de modelo no encontrado."""
+    """Lista los modelos Gemini que soportan generateContent, ya ordenados por
+    preferencia (el primero es el que usaria armar_frase con modelo=None)."""
     import google.generativeai as genai
     genai.configure(api_key=api_key or os.environ.get("GEMINI_API_KEY"))
-    return [m.name for m in genai.list_models()
-            if "generateContent" in m.supported_generation_methods]
+    nombres = [m.name for m in genai.list_models()
+               if "generateContent" in m.supported_generation_methods]
+    return _ordenar_por_preferencia(nombres)
