@@ -60,3 +60,69 @@ def construir_secuencia_glosas(items, model, clases, top_k: int = 5,
             print(f"seña: {obj:22} -> {r['top1']:22} {r['conf']:.0%}  "
                   f"locking in...  [{estado}]")
     return secuencia, reporte
+
+
+class DetectorContinuo:
+    """Mecanismo de 'locking in' para un stream (webcam).
+
+    En cada frame recibe las probabilidades del modelo sobre la ventana actual y
+    decide cuando FIJAR una glosa: cuando la misma clase top-1 supera `umbral`
+    durante `estabilidad` frames seguidos. Tras fijar entra en `cooldown` frames
+    para no fijar la misma seña repetida. Las glosas fijadas se acumulan como
+    listas top-k (lo que luego recibe el LLM).
+
+    No depende de tensorflow/mediapipe: se le pasan las probabilidades ya calculadas.
+    """
+
+    def __init__(self, clases, umbral: float = 0.5, estabilidad: int = 6,
+                 cooldown: int = 12, top_k: int = 5):
+        self.clases = clases
+        self.umbral = umbral
+        self.estabilidad = estabilidad
+        self.cooldown = cooldown
+        self.top_k = top_k
+        self.secuencia: list[list[str]] = []   # top-k por glosa fijada
+        self._cand = None        # clase candidata en evaluacion
+        self._conteo = 0         # frames seguidos sosteniendo el candidato
+        self._cooldown = 0       # frames restantes de enfriamiento
+        self.ultima_conf = 0.0
+        self.ultima_top1 = None
+
+    def actualizar(self, probs):
+        """probs: vector de probabilidades (len = nº clases). Devuelve la glosa
+        recien FIJADA en este frame, o None."""
+        import numpy as np
+        idx = np.argsort(probs)[-self.top_k:][::-1]
+        top1 = self.clases[int(idx[0])]
+        conf = float(probs[int(idx[0])])
+        self.ultima_top1, self.ultima_conf = top1, conf
+
+        if self._cooldown > 0:
+            self._cooldown -= 1
+
+        # acumular estabilidad solo si supera umbral y se mantiene la misma clase
+        if conf >= self.umbral and top1 == self._cand:
+            self._conteo += 1
+        elif conf >= self.umbral:
+            self._cand = top1
+            self._conteo = 1
+        else:
+            self._cand = None
+            self._conteo = 0
+
+        ya_fijada = self.secuencia and self.secuencia[-1][0] == top1
+        if (self._conteo >= self.estabilidad and self._cooldown == 0
+                and not ya_fijada):
+            fijada_topk = [self.clases[int(i)] for i in idx]
+            self.secuencia.append(fijada_topk)
+            self._cooldown = self.cooldown
+            self._conteo = 0
+            self._cand = None
+            return top1
+        return None
+
+    def reiniciar(self):
+        self.secuencia.clear()
+        self._cand = None
+        self._conteo = 0
+        self._cooldown = 0
