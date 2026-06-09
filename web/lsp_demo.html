@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LSP — Señas a voz</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%; width: 100%;
+    background: #05060f; overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    color: #e8f6ff;
+  }
+  #stage { position: fixed; inset: 0; }
+  #cam { position: absolute; inset: 0; width: 100%; height: 100%;
+         object-fit: cover; transform: scaleX(-1); }
+  #overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  /* Chips de glosas reconocidas (arriba) */
+  #chips {
+    position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+    max-width: 92vw; z-index: 10;
+  }
+  .chip {
+    background: rgba(0,255,255,0.12); border: 1px solid #00e5ff;
+    color: #d8feff; padding: 6px 14px; border-radius: 20px;
+    font-size: 14px; letter-spacing: 1px; font-weight: 600;
+    text-shadow: 0 0 8px rgba(0,229,255,0.7);
+    box-shadow: 0 0 14px rgba(0,229,255,0.25);
+    animation: pop .25s ease;
+  }
+  @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+  /* Candidato actual + barra "locking in" (centro-abajo) */
+  #locking {
+    position: fixed; bottom: 130px; left: 50%; transform: translateX(-50%);
+    text-align: center; z-index: 10; min-width: 280px;
+  }
+  #cand { font-size: 22px; font-weight: 700; letter-spacing: 2px;
+          color: #fff; text-shadow: 0 0 12px #00e5ff; }
+  #barwrap { margin: 8px auto 0; width: 280px; height: 10px;
+             background: rgba(255,255,255,0.12); border-radius: 6px; overflow: hidden; }
+  #bar { height: 100%; width: 0%; background: linear-gradient(90deg,#00e5ff,#ff2bd6);
+         transition: width .08s linear; }
+
+  /* Panel inferior: frase + controles */
+  #panel {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 12;
+    background: linear-gradient(180deg, rgba(5,6,15,0) 0%, rgba(5,6,15,0.92) 40%);
+    padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 10px;
+  }
+  #frase { min-height: 24px; font-size: 19px; color: #fffbe6;
+           text-shadow: 0 0 10px rgba(255,210,0,0.5); text-align: center; }
+  #controls { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  button {
+    background: linear-gradient(135deg, rgba(0,229,255,0.18), rgba(255,43,214,0.18));
+    border: 1.5px solid #00e5ff; color: #fff; padding: 10px 20px;
+    font: inherit; font-size: 14px; letter-spacing: 1px; cursor: pointer;
+    border-radius: 6px; text-shadow: 0 0 6px #00e5ff;
+  }
+  button:hover { background: rgba(0,229,255,0.3); }
+  button:disabled { opacity: .4; cursor: default; }
+  #gkey { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.25);
+          color: #cfe; padding: 9px 12px; border-radius: 6px; font: inherit;
+          width: 230px; }
+
+  #status { position: fixed; top: 12px; left: 12px; z-index: 11;
+            padding: 6px 12px; background: rgba(0,0,0,0.55);
+            border: 1px solid rgba(0,229,255,0.4); border-radius: 6px;
+            font-size: 12px; letter-spacing: 1px; color: #9fe; }
+  #debug { position: fixed; bottom: 100px; left: 12px; z-index: 11;
+           font-size: 11px; color: #ff8ae2; opacity: .8; }
+
+  /* Overlay de inicio */
+  #start { position: fixed; inset: 0; z-index: 100;
+    background: radial-gradient(ellipse at center, #0a0f25 0%, #02030a 100%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 20px; }
+  #start h1 { color: #00e5ff; text-shadow: 0 0 18px #00e5ff;
+              font-size: 38px; letter-spacing: 4px; margin: 0 0 6px; }
+  #start h2 { color: #ff2bd6; text-shadow: 0 0 12px #ff2bd6; font-weight: 400;
+              font-size: 14px; letter-spacing: 2px; margin: 0 0 30px; }
+  #start p { max-width: 440px; color: #9fb; font-size: 13px; line-height: 1.6; margin: 0 0 26px; }
+  #err { margin-top: 18px; max-width: 560px; padding: 10px 16px;
+         border: 1px solid #ff4444; background: rgba(80,0,0,0.6); color: #ffd;
+         border-radius: 6px; font-size: 12px; display: none; line-height: 1.5; }
+  #err.on { display: block; }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <video id="cam" playsinline autoplay muted></video>
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <div id="status">inicia la cámara</div>
+  <div id="debug">—</div>
+  <div id="chips"></div>
+
+  <div id="locking">
+    <div id="cand">—</div>
+    <div id="barwrap"><div id="bar"></div></div>
+  </div>
+
+  <div id="panel">
+    <div id="frase"></div>
+    <div id="controls">
+      <button id="btnFrase" disabled>🗣️ Armar frase y hablar</button>
+      <button id="btnLimpiar">🧹 Limpiar</button>
+      <input id="gkey" type="password" placeholder="(opcional) API key de Gemini" />
+    </div>
+  </div>
+
+  <div id="start">
+    <h1>⌬ LSP → VOZ</h1>
+    <h2>RECONOCIMIENTO DE LENGUA DE SEÑAS PERUANA</h2>
+    <p>Muestra una seña a la cámara. Cuando el modelo se estabiliza, la glosa se
+       "fija" como un chip arriba. Pulsa <b>Armar frase</b> para convertir las señas
+       en una oración hablada.</p>
+    <button id="startBtn">▶ INICIAR CÁMARA</button>
+    <div id="err"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5.1675471629/holistic.js" crossorigin="anonymous"></script>
+<script>
+'use strict';
+
+// ===================== Config =====================
+const FRAMES = 30;            // ventana temporal (debe coincidir con el entrenamiento)
+const FEATURES = 258;         // pose 33*4 + manoIzq 21*3 + manoDer 21*3
+const PREDICE_CADA = 4;       // predecir cada N frames (fluidez)
+// "Locking in": fija una glosa si la top-1 supera UMBRAL durante ESTABILIDAD frames
+const UMBRAL = 0.45;
+const ESTABILIDAD = 5;
+const COOLDOWN = 14;
+
+const $ = (id) => document.getElementById(id);
+const statusEl = $('status'), debugEl = $('debug');
+const setStatus = (m) => statusEl.textContent = m;
+
+let cam, canvas, ctx, holistic, model, clases = [];
+let buffer = [];                  // arrays Float32(258)
+let frameN = 0, lastResults = null, running = false;
+
+// Estado de locking-in (equivalente a DetectorContinuo de Python)
+const det = { secuencia: [], cand: null, conteo: 0, cooldown: 0, top1: null, conf: 0 };
+
+// ===================== Arranque =====================
+$('startBtn').addEventListener('click', async () => {
+  $('startBtn').disabled = true; $('startBtn').textContent = 'INICIANDO...';
+  try {
+    await cargarModeloYClases();
+    await iniciarCamara();
+    await iniciarHolistic();
+    $('start').style.display = 'none';
+    running = true;
+    requestAnimationFrame(loop);
+  } catch (e) {
+    console.error(e);
+    $('err').textContent = '✖ ' + e.message;
+    $('err').classList.add('on');
+    $('startBtn').disabled = false; $('startBtn').textContent = '↻ REINTENTAR';
+  }
+});
+
+async function cargarModeloYClases() {
+  setStatus('cargando modelo...');
+  clases = await (await fetch('web_model/classes_pucp305.json')).json();
+  try {
+    model = await tf.loadLayersModel('web_model/model.json');
+  } catch (e) {
+    throw new Error('No se pudo cargar el modelo TF.js (web_model/model.json). '
+      + 'Genera web_model con el notebook 06 y sírvelo por HTTP. Detalle: ' + e.message);
+  }
+  // warmup
+  tf.tidy(() => model.predict(tf.zeros([1, FRAMES, FEATURES])));
+  setStatus(`modelo listo · ${clases.length} glosas`);
+}
+
+async function iniciarCamara() {
+  cam = $('cam'); canvas = $('overlay'); ctx = canvas.getContext('2d');
+  redimensionar(); window.addEventListener('resize', redimensionar);
+  if (!navigator.mediaDevices?.getUserMedia)
+    throw new Error('getUserMedia no disponible. Sirve por http://localhost:8000 (no file://).');
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: false });
+  cam.srcObject = stream;
+  await new Promise((res, rej) => {
+    cam.onloadedmetadata = () => cam.play().then(res).catch(res);
+    setTimeout(() => cam.videoWidth > 0 ? res() : rej(new Error('La cámara no entrega frames.')), 8000);
+  });
+}
+
+async function iniciarHolistic() {
+  setStatus('cargando MediaPipe Holistic...');
+  if (typeof Holistic === 'undefined') throw new Error('No se cargó MediaPipe Holistic desde el CDN.');
+  holistic = new Holistic({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5.1675471629/${f}` });
+  holistic.setOptions({
+    modelComplexity: 1, smoothLandmarks: true, refineFaceLandmarks: false,
+    minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+  holistic.onResults((r) => { lastResults = r; });
+  await holistic.initialize();
+  setStatus('listo — muestra una seña');
+}
+
+function redimensionar() {
+  canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+}
+
+// ===================== Bucle =====================
+async function loop() {
+  if (!running) return;
+  if (cam.readyState >= 2 && !cam.paused) {
+    try { await holistic.send({ image: cam }); } catch (e) { /* frame perdido */ }
+  }
+  if (lastResults) {
+    dibujar(lastResults);
+    buffer.push(featuresDe(lastResults));
+    if (buffer.length > FRAMES) buffer.shift();
+    frameN++;
+    if (buffer.length === FRAMES && frameN % PREDICE_CADA === 0) await predecir();
+  }
+  actualizarDebug();
+  requestAnimationFrame(loop);
+}
+
+// pose 33*(x,y,z,visibility) + manoIzq 21*(x,y,z) + manoDer 21*(x,y,z) = 258
+// (mismo orden que src/preprocesamiento/extraccion_keypoints.extraer_keypoints)
+function featuresDe(r) {
+  const f = new Float32Array(FEATURES);
+  const pose = r.poseLandmarks;
+  if (pose) for (let i = 0; i < 33; i++) {
+    const p = pose[i]; f[i*4]=p.x; f[i*4+1]=p.y; f[i*4+2]=p.z; f[i*4+3]=p.visibility ?? 0;
+  }
+  const lh = r.leftHandLandmarks;
+  if (lh) for (let i = 0; i < 21; i++) {
+    const p = lh[i]; f[132+i*3]=p.x; f[132+i*3+1]=p.y; f[132+i*3+2]=p.z;
+  }
+  const rh = r.rightHandLandmarks;
+  if (rh) for (let i = 0; i < 21; i++) {
+    const p = rh[i]; f[195+i*3]=p.x; f[195+i*3+1]=p.y; f[195+i*3+2]=p.z;
+  }
+  return f;
+}
+
+async function predecir() {
+  const flat = new Float32Array(FRAMES * FEATURES);
+  for (let i = 0; i < FRAMES; i++) flat.set(buffer[i], i * FEATURES);
+  const probs = tf.tidy(() => model.predict(tf.tensor(flat, [1, FRAMES, FEATURES])));
+  const data = await probs.data(); probs.dispose();
+  // top-1 y top-5
+  const idx = Array.from(data.keys()).sort((a, b) => data[b] - data[a]);
+  const top1 = clases[idx[0]], conf = data[idx[0]];
+  det.top1 = top1; det.conf = conf;
+  lockingIn(top1, conf, idx.slice(0, 5).map(i => clases[i]));
+}
+
+// Equivalente JS de DetectorContinuo.actualizar
+function lockingIn(top1, conf, top5) {
+  if (det.cooldown > 0) det.cooldown--;
+  if (conf >= UMBRAL && top1 === det.cand) det.conteo++;
+  else if (conf >= UMBRAL) { det.cand = top1; det.conteo = 1; }
+  else { det.cand = null; det.conteo = 0; }
+
+  const yaFijada = det.secuencia.length && det.secuencia[det.secuencia.length-1][0] === top1;
+  if (det.conteo >= ESTABILIDAD && det.cooldown === 0 && !yaFijada) {
+    det.secuencia.push(top5);
+    det.cooldown = COOLDOWN; det.conteo = 0; det.cand = null;
+    render();
+  }
+  // UI del candidato + barra
+  $('cand').textContent = conf >= UMBRAL ? top1 : '—';
+  $('bar').style.width = Math.min(100, conf * 100).toFixed(0) + '%';
+}
+
+function render() {
+  $('chips').innerHTML = '';
+  for (const slot of det.secuencia) {
+    const c = document.createElement('div'); c.className = 'chip'; c.textContent = slot[0];
+    $('chips').appendChild(c);
+  }
+  $('btnFrase').disabled = det.secuencia.length === 0;
+}
+
+// ===================== Dibujo de landmarks =====================
+function pto(p) { return [(1 - p.x) * canvas.width, p.y * canvas.height]; } // espejo X
+const HAND_CONN = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+const POSE_CONN = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24]];
+
+function dibujar(r) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (r.poseLandmarks) trazo(r.poseLandmarks, POSE_CONN, 'rgba(120,200,255,0.5)', 2);
+  if (r.leftHandLandmarks) mano(r.leftHandLandmarks, [0,229,255]);
+  if (r.rightHandLandmarks) mano(r.rightHandLandmarks, [255,43,214]);
+}
+
+function trazo(lm, conns, color, w) {
+  ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineCap = 'round';
+  for (const [a, b] of conns) {
+    if (!lm[a] || !lm[b]) continue;
+    const [x1,y1] = pto(lm[a]), [x2,y2] = pto(lm[b]);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  }
+}
+
+function mano(lm, rgb) {
+  ctx.save(); ctx.shadowBlur = 12; ctx.shadowColor = `rgb(${rgb})`;
+  trazo(lm, HAND_CONN, `rgba(${rgb},0.7)`, 2.5);
+  for (let i = 0; i < lm.length; i++) {
+    const [x, y] = pto(lm[i]); const tip = [4,8,12,16,20].includes(i);
+    ctx.fillStyle = `rgb(${rgb})`;
+    ctx.beginPath(); ctx.arc(x, y, tip ? 7 : 4, 0, 6.2832); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function actualizarDebug() {
+  const h = (lastResults?.leftHandLandmarks?1:0) + (lastResults?.rightHandLandmarks?1:0);
+  debugEl.textContent = `buffer ${buffer.length}/${FRAMES} · manos ${h} · top1 ${det.top1 ?? '—'} ${(det.conf*100||0).toFixed(0)}%`;
+}
+
+// ===================== Frase + Voz =====================
+$('btnLimpiar').addEventListener('click', () => {
+  det.secuencia = []; det.cand = null; det.conteo = 0; det.cooldown = 0;
+  render(); $('frase').textContent = '';
+});
+
+$('btnFrase').addEventListener('click', async () => {
+  if (!det.secuencia.length) return;
+  $('btnFrase').disabled = true; $('frase').textContent = '...';
+  const key = $('gkey').value.trim();
+  let frase;
+  try { frase = key ? await armarConGemini(det.secuencia, key)
+                    : det.secuencia.map(s => s[0]).join(' '); }
+  catch (e) { console.warn(e); frase = det.secuencia.map(s => s[0]).join(' '); }
+  $('frase').textContent = frase;
+  hablar(frase);
+  $('btnFrase').disabled = false;
+});
+
+// Llama a Gemini desde el navegador. La key queda solo en tu equipo (no la publiques).
+async function armarConGemini(secuencia, key) {
+  const base = 'https://generativelanguage.googleapis.com/v1beta';
+  // elegir un modelo flash disponible para la key
+  const lm = await (await fetch(`${base}/models?key=${key}`)).json();
+  const cand = (lm.models || [])
+    .filter(m => (m.supportedGenerationMethods||[]).includes('generateContent'))
+    .map(m => m.name).sort();
+  const flash = cand.find(n => n.includes('flash')) || cand[0];
+  if (!flash) throw new Error('sin modelos Gemini para esta key');
+
+  const glosas = secuencia.map((s, i) => `${i+1}. uno de: ${s.join(', ')}`).join('\n');
+  const prompt = `Eres un intérprete de Lengua de Señas Peruana en un hospital. `
+    + `Recibes glosas (palabras-seña) en orden; cuando hay varios candidatos elige el más coherente. `
+    + `Devuelve UNA sola frase natural en español, sin comillas ni explicación.\n\n`
+    + `Glosas:\n${glosas}\n\nFrase:`;
+  const res = await fetch(`${base}/${flash}:generateContent?key=${key}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
+  const j = await res.json();
+  const txt = j?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!txt) throw new Error('respuesta vacía de Gemini');
+  return txt.trim();
+}
+
+function hablar(texto) {
+  try {
+    const u = new SpeechSynthesisUtterance(texto);
+    u.lang = 'es-MX'; u.rate = 1;
+    const v = speechSynthesis.getVoices().find(v => v.lang.startsWith('es'));
+    if (v) u.voice = v;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  } catch (e) { console.warn('TTS no disponible', e); }
+}
+</script>
+</body>
+</html>

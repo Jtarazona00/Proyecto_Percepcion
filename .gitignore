@@ -24,6 +24,9 @@ models/*.joblib
 entreno dataset/
 _rgb_completo/
 
+# Modelo exportado a TensorFlow.js (se genera con el notebook 06)
+web/web_model/
+
 # VS Code / IDEs
 .vscode/
 .idea/
