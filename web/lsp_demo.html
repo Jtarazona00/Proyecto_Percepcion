@@ -169,7 +169,9 @@ async function cargarModeloYClases() {
   setStatus('cargando modelo...');
   clases = await (await fetch('web_model/classes_pucp305.json')).json();
   try {
-    model = await tf.loadLayersModel('web_model/model.json');
+    // GraphModel (grafo congelado): evita el problema de nombres de pesos del
+    // BiLSTM que tiene loadLayersModel con modelos de Keras 3.
+    model = await tf.loadGraphModel('web_model/model.json');
   } catch (e) {
     throw new Error('No se pudo cargar el modelo TF.js (web_model/model.json). '
       + 'Genera web_model con el notebook 06 y sírvelo por HTTP. Detalle: ' + e.message);
