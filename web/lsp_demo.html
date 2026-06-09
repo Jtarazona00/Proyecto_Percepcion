@@ -176,8 +176,11 @@ async function cargarModeloYClases() {
     throw new Error('No se pudo cargar el modelo TF.js (web_model/model.json). '
       + 'Genera web_model con el notebook 06 y sírvelo por HTTP. Detalle: ' + e.message);
   }
-  // warmup
-  tf.tidy(() => model.predict(tf.zeros([1, FRAMES, FEATURES])));
+  // warmup. executeAsync (no predict) porque el LSTM tiene control flow dinamico
+  // (bucle while -> ops Enter/Exit) que TF.js solo ejecuta de forma asincrona.
+  const w = tf.zeros([1, FRAMES, FEATURES]);
+  const o = await model.executeAsync(w);
+  w.dispose(); (Array.isArray(o) ? o : [o]).forEach(t => t.dispose());
   setStatus(`modelo listo · ${clases.length} glosas`);
 }
 
@@ -247,16 +250,28 @@ function featuresDe(r) {
   return f;
 }
 
+let prediciendo = false;
 async function predecir() {
-  const flat = new Float32Array(FRAMES * FEATURES);
-  for (let i = 0; i < FRAMES; i++) flat.set(buffer[i], i * FEATURES);
-  const probs = tf.tidy(() => model.predict(tf.tensor(flat, [1, FRAMES, FEATURES])));
-  const data = await probs.data(); probs.dispose();
-  // top-1 y top-5
-  const idx = Array.from(data.keys()).sort((a, b) => data[b] - data[a]);
-  const top1 = clases[idx[0]], conf = data[idx[0]];
-  det.top1 = top1; det.conf = conf;
-  lockingIn(top1, conf, idx.slice(0, 5).map(i => clases[i]));
+  if (prediciendo) return;          // evita solapar llamadas async
+  prediciendo = true;
+  try {
+    const flat = new Float32Array(FRAMES * FEATURES);
+    for (let i = 0; i < FRAMES; i++) flat.set(buffer[i], i * FEATURES);
+    const input = tf.tensor(flat, [1, FRAMES, FEATURES]);
+    const out = await model.executeAsync(input);   // async por el control flow del LSTM
+    const probsT = Array.isArray(out) ? out[0] : out;
+    const data = await probsT.data();
+    input.dispose(); (Array.isArray(out) ? out : [out]).forEach(t => t.dispose());
+    // top-1 y top-5
+    const idx = Array.from(data.keys()).sort((a, b) => data[b] - data[a]);
+    const top1 = clases[idx[0]], conf = data[idx[0]];
+    det.top1 = top1; det.conf = conf;
+    lockingIn(top1, conf, idx.slice(0, 5).map(i => clases[i]));
+  } catch (e) {
+    console.error('predecir() fallo:', e);
+  } finally {
+    prediciendo = false;
+  }
 }
 
 // Equivalente JS de DetectorContinuo.actualizar
