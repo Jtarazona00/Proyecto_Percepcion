@@ -179,7 +179,7 @@ async function cargarModeloYClases() {
   // warmup. executeAsync (no predict) porque el LSTM tiene control flow dinamico
   // (bucle while -> ops Enter/Exit) que TF.js solo ejecuta de forma asincrona.
   const w = tf.zeros([1, FRAMES, FEATURES]);
-  const o = await model.executeAsync(w);
+  const o = await model.executeAsync({ [model.inputs[0].name]: w });
   w.dispose(); (Array.isArray(o) ? o : [o]).forEach(t => t.dispose());
   setStatus(`modelo listo · ${clases.length} glosas`);
 }
@@ -258,7 +258,8 @@ async function predecir() {
     const flat = new Float32Array(FRAMES * FEATURES);
     for (let i = 0; i < FRAMES; i++) flat.set(buffer[i], i * FEATURES);
     const input = tf.tensor(flat, [1, FRAMES, FEATURES]);
-    const out = await model.executeAsync(input);   // async por el control flow del LSTM
+    // dict {nombreInput: tensor}: el control flow del LSTM requiere el mapeo explicito
+    const out = await model.executeAsync({ [model.inputs[0].name]: input });
     const probsT = Array.isArray(out) ? out[0] : out;
     const data = await probsT.data();
     input.dispose(); (Array.isArray(out) ? out : [out]).forEach(t => t.dispose());
